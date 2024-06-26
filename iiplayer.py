@@ -2,6 +2,7 @@ import os
 import sys
 import subprocess
 import json
+import argparse
 
 def search_files(input_string, folder_path):
     matching_files = []
@@ -42,23 +43,47 @@ def get_size(selected_file):
     return f"-b:v {int(bitrate)/1000}k"
    
     
-def generate_ffmpeg_command(selected_file, bitrate, ffmpeg_output, extension, two_pass):
+def generate_ffmpeg_command(selected_file, bitrate, ffmpeg_output, extension, two_pass, interlaced, invert):
     output_file = selected_file.replace(".mp4", f"_new.{extension}")
     if two_pass == False:
         return (
-            f'ffmpeg -hide_banner -i "{selected_file}" -filter_complex '+"[0:v]select='mod(n-1,2)'[top],[0:v]select='not(mod(n-1,2))'[bottom],[top]field=top[t],[bottom]field=bottom[b],[t][b]vstack,il=l=i:c=i"+f' -r 25 {ffmpeg_output} {bitrate} "{output_file}"'
+              f'ffmpeg -hide_banner -i "{selected_file}" -filter_complex "'+f"[0:v]select='mod(n-1,2)'[top],[0:v]select='not(mod(n-1,2))'[bottom],[{invert[0]}]field=top[t],[{invert[1]}]field=bottom[b],[t][b]vstack,il=l=i:c=i"+f'{interlaced[0]}" -r 25 {ffmpeg_output} {bitrate} {interlaced[1]} "{output_file}"'
         )
     else:
-        return (
-            f'ffmpeg -hide_banner -i "{selected_file}" -filter_complex '+"[0:v]select='mod(n-1,2)'[top],[0:v]select='not(mod(n-1,2))'[bottom],[top]field=top[t],[bottom]field=bottom[b],[t][b]vstack,il=l=i:c=i"+f' -r 25 {ffmpeg_output} {bitrate} -pass 1 -f null /dev/null && ffmpeg -hide_banner -i "{selected_file}" -filter_complex '+"[0:v]select='mod(n-1,2)'[top],[0:v]select='not(mod(n-1,2))'[bottom],[top]field=top[t],[bottom]field=bottom[b],[t][b]vstack,il=l=i:c=i"+f' -r 25 {ffmpeg_output} {bitrate} -pass 2 "{output_file}"'
-        )
+        one = f'ffmpeg -hide_banner -i "{selected_file}" -filter_complex "'+f"[0:v]select='mod(n-1,2)'[top],[0:v]select='not(mod(n-1,2))'[bottom],[{invert[0]}]field=top[t],[{invert[1]}]field=bottom[b],[t][b]vstack,il=l=i:c=i"+f'{interlaced[0]}" -r 25 {ffmpeg_output} {bitrate} {interlaced[1]} -pass 1 -f null /dev/null && '
+        two = f'ffmpeg -hide_banner -i "{selected_file}" -filter_complex "'+f"[0:v]select='mod(n-1,2)'[top],[0:v]select='not(mod(n-1,2))'[bottom],[{invert[0]}]field=top[t],[{invert[1]}]field=bottom[b],[t][b]vstack,il=l=i:c=i"+f'{interlaced[0]}" -r 25 {ffmpeg_output} {bitrate} {interlaced[1]} -pass 2 "{output_file}"'
+        return (one+two)
 
 def main():
-    if len(sys.argv) != 2:
-        print("Usage: python script.py <input_string>")
-        sys.exit(1)
+    parser = argparse.ArgumentParser(description="A little tool to convert iPlayer 50p files to 25i/p")
+    parser.add_argument("input_string", help="Add the PID or filename")
+    parser.add_argument("-interlaced", action="store_true", help="Enable interlaced output TFF")
+    parser.add_argument("-interlacedbff", action="store_true", help="Enable interlaced output BFF")
+    parser.add_argument("-invert", action="store_true", help="Swaps to even frames for bottom fields etc")
+    args = parser.parse_args()
+    
+    inverted = args.invert
+    
+    input_string = args.input_string
+    invert = []
+    
+    if inverted == True:
+        invert = ["bottom", "top"]
+        print("invert is true")
+    else:
+        invert = ["top", "bottom"]
+        print("invert is false")
 
-    input_string = sys.argv[1]
+
+    if args.interlaced == True:
+        print("Interlace is True TFF")
+        interlaced = [",setfield=tff", "-flags +ildct"]
+    elif args.interlacedbff == True:
+        interlaced = [",setfield=bff", "-flags +ildct"]
+        print("Interlace is True BFF")
+    else:
+        interlaced = ["",""]    
+    
     current_directory = os.path.dirname(os.path.abspath(__file__))
     file_path = os.path.join(current_directory, "iiplayer.bat")
     print(file_path)
@@ -75,10 +100,8 @@ def main():
                 
                 if keep_bitrate.lower() == "true":
                     keep_bitrate = True
-                elif keep_bitrate.lower() == "false":
-                    keep_bitrate = False
                 else:
-                    print("bit rate not set")
+                    keep_bitrate = False
                     
                 if two_pass.lower() == "true":
                     two_pass = True
@@ -100,7 +123,7 @@ def main():
 
     found_files = search_files(input_string, folder_path)
     display_matching_files(found_files)
-
+    
     if found_files:
         if len(found_files) == 1:
             selected_file = found_files[0]
@@ -109,8 +132,8 @@ def main():
                 bitrate = get_size(selected_file)
             else:
                 bitrate = ""
-
-            ffmpeg_cmd = generate_ffmpeg_command(selected_file, bitrate, ffmpeg_output, extension, two_pass)
+        
+            ffmpeg_cmd = generate_ffmpeg_command(selected_file, bitrate, ffmpeg_output, extension, two_pass, interlaced, invert)
             print(f"ffmpeg command:\n{ffmpeg_cmd}")
             subprocess.run(ffmpeg_cmd, shell=True)
         else:
@@ -120,7 +143,7 @@ def main():
                     selected_file = found_files[choice - 1]
                     bitrate = get_size(selected_file)
 
-                    ffmpeg_cmd = generate_ffmpeg_command(selected_file, bitrate, ffmpeg_output, extension, two_pass)
+                    ffmpeg_cmd = generate_ffmpeg_command(selected_file, bitrate, ffmpeg_output, extension, two_pass, interlaced, invert)
                     print(f"ffmpeg command:\n{ffmpeg_cmd}")
                     subprocess.run(ffmpeg_cmd, shell=True)
                 else:

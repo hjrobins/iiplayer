@@ -1,5 +1,5 @@
 ::iPlayer location; %USERPROFILE%\Desktop\iPlayer Recordings
-::ffmpeg export command; -c:v libx264 -c:a copy
+::ffmpeg export command; -c:v h264_nvenc -c:a copy
 ::Keep Original Bit Rate?; True
 ::Output Extension; mp4
 :: Two Pass?; True
@@ -14,4 +14,4 @@
 
 
 @echo off
-python "C:\Program Files\get_iplayer\iiplayer.py" %1
+python "C:\Program Files\get_iplayer\iiplayer.py" %*
