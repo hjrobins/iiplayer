@@ -1,7 +1,6 @@
 import os
 import sys
 import subprocess
-import shlex
 import json
 
 def search_files(input_string, folder_path):
